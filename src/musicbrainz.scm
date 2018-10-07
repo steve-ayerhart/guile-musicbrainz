@@ -11,32 +11,60 @@
   #:use-module (ice-9 receive))
 
 (define-class <mb-resource> ()
-  (mbid #:accessor mbid #:init-keyword mbid))
+  (mbid #:accessor mbid #:init-keyword #:mbid))
 
 (define-class <mb-artist> (<mb-resource>)
-  (name #:accessor name #:init-keyword name)
-  (sort-name #:accessor sort-name)
-  (type #:accessor type #:init-keyword type)
-  (area #:accessor area #:init-keyword area)
-  (date-span #:accessor  date-span #:init-keyword date-span)
-  (ipi #:accessor ipi #:init-keyword ipi)
-  (isni #:accessor isni #:init-keyword isni)
-  (aliases #:accessor aliases #:init-keyword aliases)
-  (disambiguation #:accessor disambiguation #:init-keyword disambiguation)
-  (annotation #:accessor annotation #:init-keyword annotation))
+  (name #:accessor name #:init-keyword #:name)
+  (sort-name #:accessor sort-name #:init-keyword #:sort-name)
+  (type #:accessor type #:init-keyword #:type)
+  (area #:accessor area #:init-keyword #:area)
+  (date-span #:accessor  date-span #:init-keyword #:ate-span)
+  (ipi #:accessor ipi #:init-keyword #:pi)
+  (isni #:accessor isni #:init-keyword #:sni)
+  (aliases #:accessor aliases #:init-keyword #:liases)
+  (disambiguation #:accessor disambiguation #:init-keyword #:isambiguation)
+  (annotation #:accessor annotation #:init-keyword #:nnotation))
 
 (define-method (mb-entity-name (self <mb-resource>))
   (let ((class-name ((compose symbol->string class-name class-of) self)))
     (regexp-substitute #f (string-match "<mb-([a-z]+)>" class-name) 1)))
 
 (define mb-ws-host "musicbrainz.org")
-(define mb-ws-path "/ws/2/")
+(define mb-ws-path '("ws" "2"))
 (define mb-ws-scheme 'http)
+(define mb-ws-namespace "http://musicbrainz.org/ns/mmd-2.0#")
 
 (define user-agent-header "guile-musicbrainz/0.1.0 (steve@ayerh.art)")
 (define accept-header '((application/xml)))
 
-(define* (mb-lookup resource #:optional (inc #f))
+(define (build-mb-uri . parts)
+  (let* ((path-parts (append parts mb-ws-path))
+         (path (string-join path-parts "/")))
+    (build-uri
+     mb-ws-scheme
+     #:host mb-ws-host
+     #:path path)))
+
+(define (mb-request . parts)
+  (let ((headers `((accept . ,accept-header)
+                   (user-agent . ,user-agent-header))))
+    (receive (response body)
+        (http-get
+         (build-mb-uri parts)
+         #:streaming #t
+         #:headers headers)
+      ; TODO: inspect response? adjust rate limiting? etc.
+      (call-with-port
+       body
+       (λ (p)
+         (xml->sxml p #:namespaces `((mb . ,mb-ws-namespace))))))))
+
+(define-method (lookup (self <mb-resource>))
+  (mb-request
+   (mb-entity-name
+
+
+(define* (mb-lookup #:optional (inc #f))
   (let ((headers `((accept . ,accept-header)
                    (user-agent . ,user-agent-header)))
         (resource-path (string-append
@@ -70,4 +98,6 @@
                   ,artist-more)
                   .
                   ,metadata-more))
-                 (list name sort-name)]))
+               (make <mb-artist>
+                 #:name name
+                 #:sort-name sort-name)]))
