@@ -10,16 +10,16 @@
   #:use-module (ice-9 regex)
   #:use-module (ice-9 receive))
 
-(define-class <mb-resource> ()
-  (mbid #:accessor mbid #:init-keyword #:mbid))
+(define-class <mb-entity> ()
+  (mbid #:accessor mbid #:init-keyword #:mbid #:init-value #f))
 
-(define-method (display (self <mb-resource>) port)
-  (format port "#<<mb-artist> ~a>" (mbid self)))
+(define-method (display (self <mb-entity>) port)
+  (format port "#<<mb-entity> ~a>" (mbid self)))
 
-(define-method (write (self <mb-resource>) port)
-  (format port "#<<mb-artist> ~a>" (mbid self)))
+(define-method (write (self <mb-entity>) port)
+  (format port "#<<mb-entity> ~a>" (mbid self)))
 
-(define-class <mb-artist> (<mb-resource>)
+(define-class <mb-artist> (<mb-entity>)
   (name #:accessor name #:init-keyword #:name)
   (sort-name #:accessor sort-name #:init-keyword #:sort-name)
   (type #:accessor type #:init-keyword #:type)
@@ -31,7 +31,7 @@
   (disambiguation #:accessor disambiguation #:init-keyword #:isambiguation)
   (annotation #:accessor annotation #:init-keyword #:nnotation))
 
-(define-method (mb-entity-name (self <mb-resource>))
+(define-method (mb-entity-name (self <mb-entity>))
   (let ((class-name ((compose symbol->string class-name class-of) self)))
     (regexp-substitute #f (string-match "<mb-([a-z]+)>" class-name) 1)))
 
@@ -66,33 +66,37 @@
        (λ (p)
          (xml->sxml p #:namespaces `((mb . ,mb-ws-namespace))))))))
 
-(define-method (lookup (resource <mb-resource>))
-  (mb-request
-   (mb-entity-name resource)
-   (mbid resource)))
+(define-method (lookup (entity <mb-entity>))
+  (mb-entity-response->entity
+   (mb-request
+    (mb-entity-name entity)
+    (mbid entity))))
 
-(define-method (lookup (resource <mb-resource>) (inc <list>))
-  (lookup resource))
+(define-method (lookup (entity <mb-entity>) (inc <list>))
+  (lookup entity))
 
 (define deniro
   (make <mb-artist>
     #:mbid "f01846dc-1585-401c-a46a-d0b3a824114a"))
 
-(define (mb-artist-response->mb-artist sxml)
+(define (mb-entity-response->entity sxml)
+  (define (parse-artist artist)
+    (sxml-match artist
+                [(mb:artist (@ (id ,mbid)
+                               (type-id ,type-id)
+                               (type ,type))
+                            (mb:name ,name)
+                            (mb:sort-name ,sort-name) . ,rest)
+                (make <mb-artist>
+                  #:mbid mbid
+                  #:name name
+                  #:sort-name sort-name)]))
+  (define (parse-entity entity)
+    (sxml-match entity
+                [,[parse-artist -> artist] artist]))
   (sxml-match sxml
               [(*TOP*
                 (*PI* . ,pi)
                 (mb:metadata
-                 (mb:artist (@ (id ,mbid)
-                               (type-id ,type-id)
-                               (type ,type))
-                  (mb:name ,name)
-                  (mb:sort-name ,sort-name)
-                  .
-                  ,artist-more)
-                  .
-                  ,metadata-more))
-               (make <mb-artist>
-                 #:mbid mbid
-                 #:name name
-                 #:sort-name sort-name)]))
+                 ,[parse-entity -> entity]))
+                entity]))
