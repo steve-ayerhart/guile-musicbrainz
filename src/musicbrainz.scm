@@ -13,6 +13,12 @@
 (define-class <mb-resource> ()
   (mbid #:accessor mbid #:init-keyword #:mbid))
 
+(define-method (display (self <mb-resource>) port)
+  (format port "#<<mb-artist> ~a>" (mbid self)))
+
+(define-method (write (self <mb-resource>) port)
+  (format port "#<<mb-artist> ~a>" (mbid self)))
+
 (define-class <mb-artist> (<mb-resource>)
   (name #:accessor name #:init-keyword #:name)
   (sort-name #:accessor sort-name #:init-keyword #:sort-name)
@@ -31,15 +37,16 @@
 
 (define mb-ws-host "musicbrainz.org")
 (define mb-ws-path '("ws" "2"))
-(define mb-ws-scheme 'http)
+(define mb-ws-scheme 'https)
 (define mb-ws-namespace "http://musicbrainz.org/ns/mmd-2.0#")
 
 (define user-agent-header "guile-musicbrainz/0.1.0 (steve@ayerh.art)")
 (define accept-header '((application/xml)))
 
-(define (build-mb-uri . parts)
-  (let* ((path-parts (append parts mb-ws-path))
-         (path (string-join path-parts "/")))
+(define (build-mb-uri parts)
+  (display parts)
+  (let* ((path-parts (append mb-ws-path parts))
+         (path (string-append "/" (string-join path-parts "/"))))
     (build-uri
      mb-ws-scheme
      #:host mb-ws-host
@@ -51,7 +58,7 @@
     (receive (response body)
         (http-get
          (build-mb-uri parts)
-         #:streaming #t
+         #:streaming? #t
          #:headers headers)
       ; TODO: inspect response? adjust rate limiting? etc.
       (call-with-port
@@ -59,39 +66,26 @@
        (λ (p)
          (xml->sxml p #:namespaces `((mb . ,mb-ws-namespace))))))))
 
-(define-method (lookup (self <mb-resource>))
+(define-method (lookup (resource <mb-resource>))
   (mb-request
-   (mb-entity-name
+   (mb-entity-name resource)
+   (mbid resource)))
 
+(define-method (lookup (resource <mb-resource>) (inc <list>))
+  (lookup resource))
 
-(define* (mb-lookup #:optional (inc #f))
-  (let ((headers `((accept . ,accept-header)
-                   (user-agent . ,user-agent-header)))
-        (resource-path (string-append
-                        mb-ws-path
-                        (mb-entity-name resource)
-                        "/"
-                        (mbid resource))))
-    (receive (response body)
-        (http-get
-         (build-uri mb-ws-scheme
-                    #:host mb-ws-host
-                    #:path resource-path)
-         #:streaming? #t
-         #:headers headers)
-      ; TODO: inspect response? adjust rate limiting?
-      (call-with-port body
-                      (λ (p) (xml->sxml p #:namespaces '((mb . "http://musicbrainz.org/ns/mmd-2.0#"))))))))
-
-(define deniro (make <mb-artist>))
-(set! (mbid deniro) "f01846dc-1585-401c-a46a-d0b3a824114a")
+(define deniro
+  (make <mb-artist>
+    #:mbid "f01846dc-1585-401c-a46a-d0b3a824114a"))
 
 (define (mb-artist-response->mb-artist sxml)
   (sxml-match sxml
               [(*TOP*
                 (*PI* . ,pi)
                 (mb:metadata
-                 (mb:artist (@ . ,artist-attr)
+                 (mb:artist (@ (id ,mbid)
+                               (type-id ,type-id)
+                               (type ,type))
                   (mb:name ,name)
                   (mb:sort-name ,sort-name)
                   .
@@ -99,5 +93,6 @@
                   .
                   ,metadata-more))
                (make <mb-artist>
+                 #:mbid mbid
                  #:name name
                  #:sort-name sort-name)]))
