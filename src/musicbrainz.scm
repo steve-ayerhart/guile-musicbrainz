@@ -3,10 +3,11 @@
   #:use-module (sxml ssax)
   #:use-module (sxml xpath)
   #:use-module (sxml match)
-  #:use-module (oop goops)
   #:use-module (web uri)
   #:use-module (web client)
   #:use-module (rnrs io ports)
+  #:use-module (srfi srfi-9)
+  #:use-module (srfi srfi-9 gnu)
   #:use-module (ice-9 regex)
   #:use-module (ice-9 receive))
 
@@ -18,43 +19,34 @@
 (define user-agent-header "guile-musicbrainz/0.1.0 (steve@ayerh.art)")
 (define accept-header '((application/xml)))
 
-(define-class <mb-entity> ()
-  (mbid #:accessor mbid #:init-keyword #:mbid #:init-value #f))
+;(define* (lookup type mbid #:optional (inc '()))
+;  (let ((type (symbol->string type))
+;        (inc (map symbol->string inc)))
+;    (mb-entity-response->entity
+;     (mb-request (list type) mbid inc))))
 
-(define-method (display (entity <mb-entity>) port)
-  (format port "#<<mb-entity> ~a>" (mbid entity)))
+;(define-record-type <mb-artist>
+;  (make-mb-artist name sort-name type area date-span ipi isni aliases disambiguation annotation)
+;  mb-artist?
+;  (name artist-name)
+;  (sort-name artist-sort-name)
+;  (type artist-type)
+;  (area artist-area)
+;  (date-span artist-date-span)
+;  (ipi artist-ipi)
+;  (isni artist-isni)
+;  (aliases artist-aliases)
+;  (annotation artist-annotation))
 
-(define-method (write (entity <mb-entity>) port)
-  (format port "#<<mb-~a> ~a>" (mb-entity-name entity) (mbid entity)))
-
-(define-method (lookup (entity <mb-entity>) (inc <list>))
-  (mb-entity-response->entity
-   (mb-request
-    inc
-    (mb-entity-name entity)
-    (mbid entity))))
-
-(define-method (lookup (entity <mb-entity>))
-  (lookup entity '()))
-
-(define-method (mb-entity-name (self <mb-entity>))
-  (let ((class-name ((compose symbol->string class-name class-of) self)))
-    (regexp-substitute #f (string-match "<mb-([a-z]+)>" class-name) 1)))
+(define-record-type <mb-artist>
+  (make-mb-artist mbid name sort-name)
+  mb-artist?
+  (mbid artist-mbid)
+  (name artist-name)
+  (sort-name artist-sort-name))
 
 
-(define-class <mb-artist> (<mb-entity>)
-  (name #:accessor name #:init-keyword #:name)
-  (sort-name #:accessor sort-name #:init-keyword #:sort-name)
-  (type #:accessor type #:init-keyword #:type)
-  (area #:accessor area #:init-keyword #:area)
-  (date-span #:accessor  date-span #:init-keyword #:ate-span)
-  (ipi #:accessor ipi #:init-keyword #:pi)
-  (isni #:accessor isni #:init-keyword #:sni)
-  (aliases #:accessor aliases #:init-keyword #:liases)
-  (disambiguation #:accessor disambiguation #:init-keyword #:isambiguation)
-  (annotation #:accessor annotation #:init-keyword #:nnotation))
-
-(define* (build-mb-uri parts #:optional (inc '()))
+(define* (build-mb-uri parts inc)
   (let* ((path-parts (append mb-ws-path parts))
          (path (string-append "/" (string-join path-parts "/"))))
     (build-uri
@@ -63,11 +55,7 @@
      #:host mb-ws-host
      #:path path)))
 
-(define* (mb-request #:optional (inc '())  #:rest parts)
-  (display parts)
-  (newline)
-  (display inc)
-  (newline)
+(define* (mb-request parts inc)
   (let ((headers `((accept . ,accept-header)
                    (user-agent . ,user-agent-header))))
     (receive (response body)
@@ -81,9 +69,9 @@
        (λ (p)
          (xml->sxml p #:namespaces `((mb . ,mb-ws-namespace))))))))
 
-(define deniro
-  (make <mb-artist>
-    #:mbid "f01846dc-1585-401c-a46a-d0b3a824114a"))
+;(define deniro
+;  (make <mb-artist>
+;    #:mbid "f01846dc-1585-401c-a46a-d0b3a824114a"))
 
 (define (mb-entity-response->entity sxml)
   (define (parse-artist artist)
@@ -94,10 +82,10 @@
                      (type ,type))
                   (mb:name ,name)
                   (mb:sort-name ,sort-name) . ,rest)
-                (make <mb-artist>
-                  #:mbid mbid
-                  #:name name
-                  #:sort-name sort-name)]))
+                (make-mb-artist
+                  mbid
+                  name
+                  sort-name)]))
 
   (define (parse-entity entity)
     (sxml-match entity
