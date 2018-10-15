@@ -25,25 +25,26 @@
 ;    (mb-entity-response->entity
 ;     (mb-request (list type) mbid inc))))
 
-;(define-record-type <mb-artist>
-;  (make-mb-artist name sort-name type area date-span ipi isni aliases disambiguation annotation)
-;  mb-artist?
-;  (name artist-name)
-;  (sort-name artist-sort-name)
-;  (type artist-type)
-;  (area artist-area)
-;  (date-span artist-date-span)
-;  (ipi artist-ipi)
-;  (isni artist-isni)
-;  (aliases artist-aliases)
-;  (annotation artist-annotation))
-
 (define-record-type <mb-artist>
-  (make-mb-artist mbid name sort-name)
+  (make-mb-artist mbid name sort-name type area country date-span ipi isni aliases disambiguation annotation)
   mb-artist?
   (mbid artist-mbid)
   (name artist-name)
-  (sort-name artist-sort-name))
+  (sort-name artist-sort-name)
+  (type artist-type)
+  (area artist-area)
+  (country artist-country)
+  (date-span artist-date-span)
+  (ipi artist-ipi)
+  (isni artist-isni)
+  (aliases artist-aliases)
+  (disambiguation artist-disambiguation)
+  (annotation artist-annotation))
+
+(set-record-type-printer!
+ <mb-artist>
+ (λ (mb-artist port)
+   (format port "#<<mb-artist> mbid: ~a>" (artist-mbid mb-artist))))
 
 
 (define* (build-mb-uri parts inc)
@@ -81,11 +82,23 @@
                      (type-id ,type-id)
                      (type ,type))
                   (mb:name ,name)
-                  (mb:sort-name ,sort-name) . ,rest)
-                (make-mb-artist
-                  mbid
-                  name
-                  sort-name)]))
+                  (mb:sort-name ,sort-name)
+                  (mb:disambiguation ,disambiguation)
+;                  (mb:gender (@ (id ,gender-id)))
+                  (mb:country ,country)
+                  . ,rest)
+;                  (mb:area (@ (id ,area-id))
+;                           (mb:name ,area-name)
+;                           (mb:sort-name ,area-sort-name)
+;                           (mb:iso-3166-1-code-list
+;                            (mb:iso-3166-1-code ,iso-area-code)))
+;                  (mb:begin-area (@ (id ,begin-area-id))
+;                                 (mb:name ,begin-area-name)
+;                                 (mb:sort-name ,begin-area-sort-name))
+;                  (mb:life-span
+;                   (mb:begin ,life-span-begin)) . ,rest)
+
+                 (make-mb-artist mbid name sort-name type #f country #f #f #f disambiguation #f)]))
 
   (define (parse-entity entity)
     (sxml-match entity
