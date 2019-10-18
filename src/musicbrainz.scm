@@ -31,31 +31,30 @@
 
 (define-method (initialize (class <mb-sxml>) init-args)
   (let* ((entity-class-name ((compose symbol->string class-name class-of) class))
-         (entity (regexp-substitute #f (string-match "<mb-(.*)>" entity-class-name 1))))
+         (entity (regexp-substitute #f (string-match "<mb-(.*)>" entity-class-name) 1)))
     (let-keywords init-args #t ((id #f))
                   (when id
                     (slot-set! class 'sxml (mb-lookup entity id)))
                   (next-method))))
 
-                                        ; TODO: check if sxml is unbound instead of if sxpath being set
 (let ((slot-value 'unbound))
-(define-method (compute-get-n-set (class <mb-sxml-class>) slot)
-  (let-keywords (slot-definition-options slot) #t ((sxpath #f))
-                (if sxpath
-                    (let ((sxpath `(mb:metadata ,@sxpath *text*)))
-                      (list (lambda (instance)
-                              (if (slot-bound? instance 'sxml)
-                                  (car ((sxml:sxpath sxpath) (slot-ref instance 'sxml)))
-                                  (if (eq? slot-value 'unbound)
-                                      (slot-unbound class instance (slot-definition-name slot))
-                                      slot-value)))
-                            (lambda (instance val)
-                              (if (slot-bound? instance 'sxml)
-                                  #f
-                                  (slot-set! instance (slot-definition-name slot) val)))))
-                    (next-method)))))
+  (define-method (compute-get-n-set (class <mb-sxml-class>) slot)
+    (let-keywords (slot-definition-options slot) #t ((sxpath #f))
+                  (if sxpath
+                      (let ((sxpath `(mb:metadata ,@sxpath *text*)))
+                        (list (lambda (instance)
+                                (if (slot-bound? instance 'sxml)
+                                    (car ((sxml:sxpath sxpath) (slot-ref instance 'sxml)))
+                                    (if (eq? slot-value 'unbound)
+                                        (slot-unbound class instance (slot-definition-name slot))
+                                        slot-value)))
+                              (lambda (instance val)
+                                (if (slot-bound? instance 'sxml)
+                                    #f
+                                    (slot-set! instance (slot-definition-name slot) val)))))
+                      (next-method)))))
 
-                                        ; TODO: add more slots
+;;; TODO: more slots
 (define-class <mb-artist> (<mb-sxml>)
   (id #:accessor mbid #:sxpath '(mb:artist @ id))
   (type #:accessor type #:sxpath '(mb:artist @ type))
